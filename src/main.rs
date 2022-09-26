@@ -1,5 +1,5 @@
-#![no_std]
-#![no_main]
+#![no_std] // Do not link the Rust stdlib
+#![no_main] // Disable all Rust-level entry points
 
 use core::panic::PanicInfo;
 
@@ -32,12 +32,10 @@ pub extern "C" fn _start() -> ! {
         unsafe {
             // Write the string byte
             *vga_buffer.offset(i as isize * 2) = byte;
-            // Write the color byte (0xb is light cyan)
-            *vga_buffer.offset(i as isize * 2 + 1) = 0xb;
+            // Write the color byte (i + 1 will be the colors)
+            *vga_buffer.offset(i as isize * 2 + 1) = i as u8 + 1;
         }
     }
 
-    loop {
-        
-    }
+    loop {}
 }
