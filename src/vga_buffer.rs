@@ -12,6 +12,31 @@ lazy_static! {
     });
 }
 
+// print! and println! macros copied, but changed to use our own
+// _print function.
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+#[doc(hidden)]
+// Since the macros need to call _print from outside this module
+// the function needs to be public. However since we consider 
+// this a private implementation detail, we used the doc(hidden)
+// attributed to hide it from the generated documentation
+pub fn _print(args: fmt::Arguments) {
+    use core::fmt::Write;
+    // This should not panic since Ok(()) is always returned 
+    // from write_str
+    WRITER.lock().write_fmt(args).unwrap();
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 // Each enum variant is stored as a u8

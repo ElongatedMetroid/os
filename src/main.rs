@@ -9,7 +9,9 @@ use vga_buffer::WRITER;
 
 /// This function is called on panic.
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
+    // Print the panic info
+    println!("{}", info);
     loop {}
 }
 
@@ -27,7 +29,11 @@ pub extern "C" fn _start() -> ! {
     // by default.
 
     WRITER.lock().write_str("Hello World\n").unwrap();
-    write!(WRITER.lock(), "Wow addition, 6.332 + 9.321 = {}", 6.332 + 9.321).unwrap();
+    writeln!(WRITER.lock(), "Wow addition, 6.332 + 9.321 = {}", 6.332 + 9.321).unwrap();
+
+    println!("Hello from our modified println macro!");
+
+    panic!("AFPOAISJFSOPIDFJSDOFIJSDFOIJ");
 
     loop {}
 }
