@@ -1,5 +1,16 @@
 use volatile::Volatile;
-use core::fmt::{self, Write};
+use core::fmt;
+use lazy_static::lazy_static;
+use spin::Mutex;
+
+lazy_static! {
+    /// Global interface to the writer
+    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
+        column_position: 0,
+        color_code: ColorCode::new(Color::Green, Color::Black),
+        buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
+    });
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,26 +87,7 @@ impl fmt::Write for Writer {
 }
 
 impl Writer {
-    pub fn print_something() {
-        let mut writer = Writer {
-            column_position: 0,
-            color_code: ColorCode::new(Color::Yellow, Color::Black),
-            // Cast the integer 0xb8000 as a mutable raw pointer
-            // then convert it to a mutable reference by 
-            // dereferencing it and borrowing it again with &mut
-            // (unsafe is required since the compiler cant 
-            // guarantee that the rwo pointer is valid)
-            buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
-        };
-    
-        writer.write_byte(b'H');
-        writer.write_string("ello ");
-        
-        // Since we implemented Write for Writer we can use 
-        // Rust's built-in write! and writeln! formatting macros
-        write!(writer, "The numbers are {} and {}", 42, 1.0/3.0).unwrap();
-    }
-
+    /// Write a string to the VGA Buffer
     pub fn write_string(&mut self, s: &str) {
         for byte in s.bytes() {
             match byte {
@@ -107,7 +99,7 @@ impl Writer {
             }
         }
     }
-
+    /// Write a single byte to the VGA Buffer
     pub fn write_byte(&mut self, byte: u8) {
         match byte {
             b'\n' => self.new_line(),
@@ -139,5 +131,36 @@ impl Writer {
         }
     }
 
-    fn new_line(&mut self) {  }
+    /// Move every character one line up (the top line will be 
+    /// deleted) and start at the beginning of the last line 
+    /// again
+    fn new_line(&mut self) { 
+        // Omit 0th row since its the row that is shifted off
+        // screen.
+        for row in 1..BUFFER_HEIGHT {
+            for col in 0..BUFFER_WIDTH {
+                let character = self.buffer.chars[row][col].read();
+                self.buffer.chars[row - 1][col].write(character);
+            }
+        }
+
+        // Clear last row
+        self.clear_row(BUFFER_HEIGHT - 1);
+        // Set the column position to zero
+        // |
+        // |Hello World\n <-- Column Postion 0
+        // |<-- Column Postion = 0
+        self.column_position = 0;
+    }
+    /// Clear the specified row with spaces
+    fn clear_row(&mut self, row: usize) {
+        let blank = ScreenChar {
+            ascii_character: b' ',
+            color_code: self.color_code,
+        };
+
+        for col in 0..BUFFER_WIDTH {
+            self.buffer.chars[row][col].write(blank);
+        }
+    }
 }

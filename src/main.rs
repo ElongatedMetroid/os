@@ -1,11 +1,11 @@
 #![no_std] // Do not link the Rust stdlib
 #![no_main] // Disable all Rust-level entry points
 
-use core::panic::PanicInfo;
+use core::{panic::PanicInfo, fmt::Write};
 
 mod vga_buffer;
 
-use vga_buffer::Writer;
+use vga_buffer::WRITER;
 
 /// This function is called on panic.
 #[panic_handler]
@@ -26,7 +26,8 @@ pub extern "C" fn _start() -> ! {
     // linker looks for a function named `_start` 
     // by default.
 
-   Writer::print_something();
+    WRITER.lock().write_str("Hello World\n").unwrap();
+    write!(WRITER.lock(), "Wow addition, 6.332 + 9.321 = {}", 6.332 + 9.321).unwrap();
 
     loop {}
 }
