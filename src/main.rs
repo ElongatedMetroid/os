@@ -3,17 +3,17 @@
 // Enable custom_test_frameworks
 #![feature(custom_test_frameworks)] 
 // Set the test_runner function
-#![test_runner(crate::test_runner)] 
+#![test_runner(os::test_runner)] 
 // Change the name of the generated function (for running tests)
 // to something different than main
 #![reexport_test_harness_main = "test_main"]
 
-use core::{panic::PanicInfo, fmt::Write};
+use core::panic::PanicInfo;
 
 mod vga_buffer;
+mod serial;
 
-use vga_buffer::WRITER;
-
+#[cfg(not(test))]
 #[panic_handler]
 /// This function is called on panic.
 fn panic(info: &PanicInfo) -> ! {
@@ -22,35 +22,10 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
-// This function is useless for non-test runs, so only include 
-// it for tests.
 #[cfg(test)]
-/// This function runs tests.
-fn test_runner(tests: &[&dyn Fn()]) {
-    println!("Running {} tests", tests.len());
-    for test in tests {
-        test();
-    }
-    exit_qemu(QemuExitCode::Success);
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// Represented as u32, since the port size is four bytes
-#[repr(u32)]
-pub enum QemuExitCode {
-    Success = 0x10,
-    Failed = 0x11,
-}
-
-pub fn exit_qemu(exit_code: QemuExitCode) {
-    use x86_64::instructions::port::Port;
-
-    unsafe {
-        // Create io port with the port number 0xf4 since we have
-        // a device (isa-debug-exit) on that port in QEMU
-        let mut port = Port::new(0xf4);
-        port.write(exit_code as u32);
-    }
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    os::test_panic_handler(info);
 }
 
 // Disable name mangling to ensure that Rust really
@@ -66,9 +41,6 @@ pub extern "C" fn _start() -> ! {
     // linker looks for a function named `_start` 
     // by default.
 
-    WRITER.lock().write_str("Hello World\n").unwrap();
-    writeln!(WRITER.lock(), "Wow addition, 6.332 + 9.321 = {}", 6.332 + 9.321).unwrap();
-
     println!("Hello from our modified println macro!");
 
     #[cfg(test)]
@@ -82,7 +54,5 @@ pub extern "C" fn _start() -> ! {
 
 #[test_case]
 fn trivial_assertion() {
-    print!("trivial assertion... ");
     assert_eq!(1, 1);
-    println!("[OK]")
 }
