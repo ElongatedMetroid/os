@@ -7,9 +7,11 @@
 // Change the name of the generated function (for running tests)
 // to something different than main
 #![reexport_test_harness_main = "test_main"]
+#![feature(abi_x86_interrupt)]
 
 pub mod vga_buffer;
 pub mod serial;
+pub mod interrupts;
 
 use core::panic::PanicInfo;
 
@@ -19,6 +21,10 @@ use core::panic::PanicInfo;
 pub enum QemuExitCode {
     Success = 0x10,
     Failed = 0x11,
+}
+
+pub fn init() {
+    interrupts::init_idt();
 }
 
 pub fn exit_qemu(exit_code: QemuExitCode) {
@@ -74,6 +80,7 @@ fn panic(info: &PanicInfo) -> ! {
 #[cfg(test)]
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    init();
     test_main();
     loop {}
 }
