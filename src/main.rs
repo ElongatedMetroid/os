@@ -41,7 +41,7 @@ pub extern "C" fn _start() -> ! {
     // linker looks for a function named `_start` 
     // by default.
 
-    print!("Starting...     ");
+    print!("Starting...\t");
 
     os::init();
 

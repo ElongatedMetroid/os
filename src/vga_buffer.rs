@@ -117,7 +117,7 @@ impl Writer {
         for byte in s.bytes() {
             match byte {
                 // Printable ASCII byte or newline
-                0x20..=0x7e | b'\n' => self.write_byte(byte),
+                0x20..=0x7e | b'\n' | b'\t' => self.write_byte(byte),
                 // Not part of the printable ASCII range,
                 // write a square character
                 _ => self.write_byte(0xfe),
@@ -128,6 +128,11 @@ impl Writer {
     pub fn write_byte(&mut self, byte: u8) {
         match byte {
             b'\n' => self.new_line(),
+            b'\t' => {
+                for _ in 0..5 {
+                    self.write_byte(b' ');
+                }
+            }
             byte => {
                 // If we are at the end of the column...
                 if self.column_position >= BUFFER_WIDTH {
