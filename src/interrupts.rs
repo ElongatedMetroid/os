@@ -1,28 +1,48 @@
+use pic8259::ChainedPics;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 use lazy_static::lazy_static;
-use crate::{println, gdt};
+use crate::{println, print, gdt};
+
+/// The default configuration of the PICs is not usable because it sends interrupt
+/// vector numbers in the range of 0–15 to the CPU. These numbers are already 
+/// occupied by CPU exceptions. For example, number 8 corresponds to a double 
+/// fault. The actual range doesn’t matter as long as it does not overlap with 
+/// the exceptions, but typically the range of 32–47 is chosen, because these are
+/// the first free numbers after the 32 exception slots.
+pub const PIC_1_OFFSET: u8 = 32;
+pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
+
+#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
+pub enum InterruptIndex {
+    Timer = PIC_1_OFFSET,
+}
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
+
+        idt.breakpoint.set_handler_fn(breakpoint_handler);
         unsafe {
             idt.double_fault.set_handler_fn(double_fault_handler)
                 // set the stack the double_fault exception will use
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
-        idt.breakpoint.set_handler_fn(breakpoint_handler);
+        // Add handler function for the timer interrupt
+        idt[InterruptIndex::Timer as usize]
+            .set_handler_fn(timer_interrupt_handler);
+
         idt
     };
 }
 
+pub static PICS: spin::Mutex<ChainedPics> = 
+    spin::Mutex::new(unsafe { 
+        ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) 
+    });
+
 pub fn init_idt() {
     IDT.load();
-}
-
-extern "x86-interrupt" fn double_fault_handler(
-    stack_frame: InterruptStackFrame, _error_code: u64
-) -> ! {
-    panic!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
 }
 
 /// Handler for the breakpoint exception, pause a program when the breakpoint
@@ -31,6 +51,25 @@ extern "x86-interrupt" fn breakpoint_handler(
     stack_frame: InterruptStackFrame
 ) {
     println!("EXCEPTION: BREAKPOINT\n{:#?}", stack_frame);
+}
+
+extern "x86-interrupt" fn double_fault_handler(
+    stack_frame: InterruptStackFrame, _error_code: u64
+) -> ! {
+    panic!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
+}
+
+extern "x86-interrupt" fn timer_interrupt_handler(
+    _stack_frame: InterruptStackFrame
+) {
+    print!(".");
+
+    // Notify the controller that the interrupt was processed and that the system
+    // is ready to recieve the next interrupt.
+    unsafe {
+        PICS.lock()
+            .notify_end_of_interrupt(InterruptIndex::Timer as u8);
+    }
 }
 
 #[test_case]

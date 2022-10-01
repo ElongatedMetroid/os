@@ -24,9 +24,14 @@ pub enum QemuExitCode {
     Failed = 0x11,
 }
 
+/// Initialize the GDT and IDT
 pub fn init() {
     gdt::init();
     interrupts::init_idt();
+    // Initialize PICS
+    unsafe { interrupts::PICS.lock().initialize() };
+    // Enable interupts
+    x86_64::instructions::interrupts::enable();
 }
 
 pub fn exit_qemu(exit_code: QemuExitCode) {
