@@ -32,9 +32,14 @@ macro_rules! println {
 // attributed to hide it from the generated documentation
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
-    // This should not panic since Ok(()) is always returned 
-    // from write_str
-    WRITER.lock().write_fmt(args).unwrap();
+    use x86_64::instructions::interrupts;
+    
+    // Execute the closure with interupts disabled
+    interrupts::without_interrupts(|| {
+        // This should not panic since Ok(()) is always returned 
+        // from write_str
+        WRITER.lock().write_fmt(args).unwrap();
+    });
 }
 
 #[allow(dead_code)]
