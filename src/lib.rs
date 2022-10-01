@@ -12,6 +12,7 @@
 pub mod vga_buffer;
 pub mod serial;
 pub mod interrupts;
+pub mod gdt;
 
 use core::panic::PanicInfo;
 
@@ -24,6 +25,7 @@ pub enum QemuExitCode {
 }
 
 pub fn init() {
+    gdt::init();
     interrupts::init_idt();
 }
 
