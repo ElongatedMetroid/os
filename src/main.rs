@@ -19,7 +19,7 @@ mod serial;
 fn panic(info: &PanicInfo) -> ! {
     // Print the panic info
     println!("{}", info);
-    loop {}
+    os::hlt_loop();
 }
 
 #[cfg(test)]
@@ -55,7 +55,7 @@ pub extern "C" fn _start() -> ! {
 
     println!("Yay no crash!");
 
-    loop {}
+    os::hlt_loop();
 }
 
 #[test_case]
