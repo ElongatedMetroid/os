@@ -14,8 +14,18 @@ pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
+///                      ____________                          ____________
+/// Real Time Clock --> |            |   Timer -------------> |            |
+/// ACPI -------------> |            |   Keyboard-----------> |            |      _____
+/// Available --------> | Secondary  |----------------------> | Primary    |     |     |
+/// Available --------> | Interrupt  |   Serial Port 2 -----> | Interrupt  |---> | CPU |
+/// Mouse ------------> | Controller |   Serial Port 1 -----> | Controller |     |_____|
+/// Co-Processor -----> |            |   Parallel Port 2/3 -> |            |
+/// Primary ATA ------> |            |   Floppy disk -------> |            |
+/// Secondary ATA ----> |____________|   Parallel Port 1----> |____________|
 pub enum InterruptIndex {
     Timer = PIC_1_OFFSET,
+    Keyboard,
 }
 
 lazy_static! {
@@ -31,6 +41,9 @@ lazy_static! {
         // Add handler function for the timer interrupt
         idt[InterruptIndex::Timer as usize]
             .set_handler_fn(timer_interrupt_handler);
+        // Add handler function for keyboard interrupt
+        idt[InterruptIndex::Keyboard as usize]
+            .set_handler_fn(keyboard_interrupt_handler);
 
         idt
     };
@@ -69,6 +82,45 @@ extern "x86-interrupt" fn timer_interrupt_handler(
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer as u8);
+    }
+}
+
+extern "x86-interrupt" fn keyboard_interrupt_handler(
+    _stack_frame: InterruptStackFrame
+) {
+    use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+    use spin::Mutex;
+    use x86_64::instructions::port::Port;
+
+    lazy_static! {
+        static ref KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> = 
+            Mutex::new(Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore));
+    }
+
+    // Lock the mutex
+    let mut keyboard = KEYBOARD.lock();
+    let mut port = Port::new(0x60);
+    // Read a byte from the keyboards data port (the scancodess)
+    let scancode: u8 = unsafe { port.read() };
+    // Pass the scancode to the add_byte method, which will 
+    // translate the scancode into an Option<KeyEvent>, the
+    // KeyEvent contains the key which caused the event and if
+    // it was a press or release event.
+    if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
+        // Produce a DecodedKey from a KeyEvent
+        if let Some(key) = keyboard.process_keyevent(key_event) {
+            match key {
+                DecodedKey::Unicode(character) => print!("{}", character),
+                DecodedKey::RawKey(key) => print!("{:?}", key),
+            }
+        }
+    }
+
+    // Notify the controller that the interrupt was processed and that the system
+    // is ready to recieve the next interrupt.
+    unsafe {
+        PICS.lock()
+            .notify_end_of_interrupt(InterruptIndex::Keyboard as u8);
     }
 }
 
