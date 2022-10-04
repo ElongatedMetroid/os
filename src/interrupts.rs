@@ -1,7 +1,7 @@
 use pic8259::ChainedPics;
-use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
+use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 use lazy_static::lazy_static;
-use crate::{println, print, gdt};
+use crate::{println, print, gdt, hlt_loop};
 
 /// The default configuration of the PICs is not usable because it sends interrupt
 /// vector numbers in the range of 0–15 to the CPU. These numbers are already 
@@ -38,6 +38,7 @@ lazy_static! {
                 // set the stack the double_fault exception will use
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
+        idt.page_fault.set_handler_fn(page_fault_handler);
         // Add handler function for the timer interrupt
         idt[InterruptIndex::Timer as usize]
             .set_handler_fn(timer_interrupt_handler);
@@ -70,6 +71,22 @@ extern "x86-interrupt" fn double_fault_handler(
     stack_frame: InterruptStackFrame, _error_code: u64
 ) -> ! {
     panic!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
+}
+
+extern "x86-interrupt" fn page_fault_handler(
+    stack_frame: InterruptStackFrame,
+    error_code: PageFaultErrorCode,
+) {
+    use x86_64::registers::control::Cr2;
+
+    println!("EXCEPTION: PAGE FAULT");
+    // The CR2 register is automatically set by the CPU on a 
+    // page fault and contains the accessed virtual address that
+    // caused the page fault.
+    println!("Accessed Address: {:?}", Cr2::read());
+    println!("Error Code: {:?}", error_code);
+    println!("{:#?}", stack_frame);
+    hlt_loop();
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(
